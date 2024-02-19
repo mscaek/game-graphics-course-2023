@@ -1,19 +1,21 @@
 import PicoGL from "../node_modules/picogl/build/module/picogl.js";
 import {mat4, vec3, mat3, vec4, vec2} from "../node_modules/gl-matrix/esm/index.js";
-
 import {positions, normals, indices} from "../blender/whale.js"
 import {positions as planePositions, uvs as planeUvs, indices as planeIndices} from "../blender/plane.js"
 
-// language=GLSL
+let baseColor = vec3.fromValues(1.0, 0.1, 0.2);
+let ambientLightColor = vec3.fromValues(0.1, 0.1, 1.0);
+let numberOfPointLights = 2;
+let pointLightColors = [vec3.fromValues(1.0, 1.0, 1.0), vec3.fromValues(0.02, 0.4, 0.5)];
+let pointLightInitialPositions = [vec3.fromValues(5, 0, 2), vec3.fromValues(-5, 0, 2)];
+let pointLightPositions = [vec3.create(), vec3.create()];
+
 let fragmentShader = `
     #version 300 es
     precision highp float;
-    
-    uniform samplerCube cubemap;    
-        
+    uniform samplerCube cubemap;
     in vec3 vNormal;
     in vec3 viewDir;
-    
     out vec4 outColor;
     
     void main()
@@ -26,7 +28,6 @@ let fragmentShader = `
     }
 `;
 
-// language=GLSL
 let vertexShader = `
     #version 300 es
             
@@ -45,7 +46,7 @@ let vertexShader = `
     
     void main()
     {
-        gl_Position = modelViewProjectionMatrix * position;           
+        gl_Position = modelViewProjectionMatrix * position;
         vUv = uv;
         viewDir = (modelMatrix * position).xyz - cameraPosition;                
         vNormal = normalMatrix * normal;
@@ -56,21 +57,15 @@ let vertexShader = `
 let mirrorFragmentShader = `
     #version 300 es
     precision highp float;
-    
     uniform sampler2D reflectionTex;
     uniform sampler2D distortionMap;
     uniform vec2 screenSize;
-    
     in vec2 vUv;        
-        
     out vec4 outColor;
-    
     void main()
     {                        
         vec2 screenPos = gl_FragCoord.xy / screenSize;
-        
-        // 0.03 is a mirror distortion factor, try making a larger distortion         
-        screenPos.x += (texture(distortionMap, vUv).r - 0.5) * 0.03;
+        screenPos.x += (texture(distortionMap, vUv).r - 0.5) * 0.2;
         outColor = texture(reflectionTex, screenPos);
     }
 `;
@@ -95,25 +90,19 @@ let mirrorVertexShader = `
     }
 `;
 
-// language=GLSL
 let skyboxFragmentShader = `
     #version 300 es
     precision mediump float;
-    
     uniform samplerCube cubemap;
     uniform mat4 viewProjectionInverse;
-    
     in vec4 v_position;
-    
     out vec4 outColor;
-    
     void main() {
       vec4 t = viewProjectionInverse * v_position;
       outColor = texture(cubemap, normalize(t.xyz / t.w));
     }
 `;
 
-// language=GLSL
 let skyboxVertexShader = `
     #version 300 es
     
@@ -148,8 +137,7 @@ let mirrorArray = app.createVertexArray()
     .vertexAttributeBuffer(1, planeUvsBuffer)
     .indexBuffer(planeIndicesBuffer);
 
-// Change the reflection texture resolution to checkout the difference
-let reflectionResolutionFactor = 0.2;
+let reflectionResolutionFactor = 1;
 let reflectionColorTarget = app.createTexture2D(app.width * reflectionResolutionFactor, app.height * reflectionResolutionFactor, {magFilter: PicoGL.LINEAR});
 let reflectionDepthTarget = app.createTexture2D(app.width * reflectionResolutionFactor, app.height * reflectionResolutionFactor, {internalFormat: PicoGL.DEPTH_COMPONENT16});
 let reflectionBuffer = app.createFramebuffer().colorTarget(0, reflectionColorTarget).depthTarget(reflectionDepthTarget);
@@ -275,12 +263,12 @@ function draw(timems) {
     vec3.rotateY(cameraPosition, vec3.fromValues(0, 2.5, 5), vec3.fromValues(0, 0, 0), time * -0.02);
     mat4.lookAt(viewMatrix, cameraPosition, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
 
-    mat4.fromXRotation(rotateXMatrix, time * 0 - Math.PI / 2);
-    mat4.fromZRotation(rotateYMatrix, time * 0.5);
+    mat4.fromXRotation(rotateXMatrix, time * 0.5 - Math.PI / 2);
+    mat4.fromXRotation(rotateYMatrix, time * 0.2);
     mat4.mul(modelMatrix, rotateXMatrix, rotateYMatrix);
 
     mat4.fromXRotation(rotateXMatrix, 0);
-    mat4.fromYRotation(rotateYMatrix, time * .2);
+    mat4.fromYRotation(rotateYMatrix, time * 0.2);
     mat4.mul(mirrorModelMatrix, rotateYMatrix, rotateXMatrix);
     mat4.translate(mirrorModelMatrix, mirrorModelMatrix, vec3.fromValues(0, -2, 0));
 
